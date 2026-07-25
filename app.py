@@ -1,162 +1,99 @@
 import streamlit as st
 import yfinance as yf
-import pandas as pd
-import requests
-import plotly.graph_objects as go
+from forensic_engine import ForensicAIAgent
 
 # 1. Page Configuration
-st.set_page_config(page_title="InvestWise India - Beginner Hub", page_icon="🟢", layout="wide")
+st.set_page_config(page_title="InvestWise AI Forensics", page_icon="🕵️‍♂️", layout="wide")
 
-# Custom Styling
+# Custom Glassmorphism Theme
 st.markdown("""
 <style>
-    .stApp { background: #080c14; color: #f3f4f6; }
+    .stApp { background: #070a13; color: #f3f4f6; }
     .glass-card {
         background: rgba(255, 255, 255, 0.04);
         border: 1px solid rgba(255, 255, 255, 0.1);
         border-radius: 12px;
-        padding: 16px;
-        margin-bottom: 15px;
+        padding: 20px;
+        margin-bottom: 20px;
     }
-    .brand-title { font-size: 1.2rem; font-weight: 700; color: #60a5fa; }
-    .brand-desc { font-size: 0.85rem; color: #9ca3af; margin-bottom: 10px; }
-    .metric-green { color: #10b981; font-size: 1.5rem; font-weight: 800; }
+    .macro-card { border-left: 4px solid #3b82f6; padding-left: 15px; margin-bottom: 15px; background: rgba(255,255,255,0.02); padding: 15px; border-radius: 8px;}
 </style>
 """, unsafe_allow_html=True)
 
-st.title("🟢 InvestWise AI: Your Investment Guide")
-st.caption("No financial experience needed — explore businesses you already use every day.")
+st.title("🕵️‍♂️ InvestWise AI: Forensic Analyst")
+st.caption("Going beyond the numbers: Concall Audits, Fine Print Scanning, and Macro Ripple Effects.")
 
-# --- CURATED EVERYDAY BRANDS DATA ---
-EVERYDAY_BRANDS = {
-    "Zomato / Blinkit": {"ticker": "ZOMATO.NS", "desc": "Food delivery & 10-minute grocery delivery app."},
-    "Tata Motors": {"ticker": "TATAMOTORS.NS", "desc": "Makes Nexon, Punch, EV cars, and Jaguar Land Rover."},
-    "HDFC Bank": {"ticker": "HDFCBANK.NS", "desc": "India's largest private bank (Credit cards, loans, savings)."},
-    "Bharti Airtel": {"ticker": "BHARTIARTL.NS", "desc": "Mobile network, 5G data, and DTH connections."},
-    "Asian Paints": {"ticker": "ASIANPAINT.NS", "desc": "Paints 8 out of 10 homes in India."},
-    "Titan (Tanishq)": {"ticker": "TITAN.NS", "desc": "Owns Tanishq jewellery, Fastrack, and Titan watches."},
-    "Reliance (Jio/Retail)": {"ticker": "RELIANCE.NS", "desc": "Jio telecom, Reliance Fresh, trends, and oil refineries."}
-}
+# --- SIDEBAR INPUT ---
+st.sidebar.header("Target Company")
+ticker_input = st.sidebar.text_input("Enter NSE Stock Symbol:", value="TATAMOTORS")
+symbol = ticker_input.upper().strip()
+if not symbol.endswith(".NS") and not symbol.endswith(".BO"):
+    symbol += ".NS"
 
-SECTORS = {
-    "🚗 Cars & Bikes": [
-        {"name": "Tata Motors", "ticker": "TATAMOTORS.NS", "desc": "Passenger cars & EVs"},
-        {"name": "Maruti Suzuki", "ticker": "MARUTI.NS", "desc": "India's highest selling car maker"},
-        {"name": "Mahindra & Mahindra", "ticker": "M&M.NS", "desc": "SUVs (Thar, XUV700) & Tractors"}
-    ],
-    "🏦 Banks & Finance": [
-        {"name": "State Bank of India (SBI)", "ticker": "SBIN.NS", "desc": "Largest government bank in India"},
-        {"name": "HDFC Bank", "ticker": "HDFCBANK.NS", "desc": "Largest private sector bank"},
-        {"name": "ICICI Bank", "ticker": "ICICIBANK.NS", "desc": "Major private bank & digital banking leader"}
-    ],
-    "💻 Tech & IT": [
-        {"name": "TCS (Tata Consultancy)", "ticker": "TCS.NS", "desc": "Global IT services giant"},
-        {"name": "Infosys", "ticker": "INFY.NS", "desc": "Software & tech consulting leader"},
-        {"name": "HCLTech", "ticker": "HCLTECH.NS", "desc": "IT engineering & cloud solutions"}
-    ]
-}
+st.markdown("---")
 
-# --- NAVIGATION TABS ---
-tab1, tab2, tab3 = st.tabs(["🛒 Everyday Brands", "🏭 Explore By Sector", "🏦 Mutual Funds For Beginners"])
-
-# ==========================================
-# TAB 1: BRANDS YOU KNOW
-# ==========================================
-with tab1:
-    st.markdown("### 1. Pick a brand you know in real life:")
-    st.caption("You don't need to guess ticker symbols — just click on a company you recognize!")
-    
-    # Grid of Everyday Brand Cards
-    cols = st.columns(3)
-    selected_ticker = None
-    selected_name = None
-    
-    for idx, (brand_name, info) in enumerate(EVERYDAY_BRANDS.items()):
-        with cols[idx % 3]:
-            st.markdown(f"""
-            <div class="glass-card">
-                <div class="brand-title">{brand_name}</div>
-                <div class="brand-desc">{info['desc']}</div>
-            </div>
-            """, unsafe_allow_html=True)
-            if st.button(f"Analyze {brand_name}", key=f"btn_{idx}"):
-                selected_ticker = info['ticker']
-                selected_name = brand_name
-
-    # Detailed Analysis view if a button was clicked
-    if selected_ticker:
-        st.markdown("---")
-        st.markdown(f"### 📊 Business Deep Dive: **{selected_name}**")
-        
-        with st.spinner("Fetching live stock details..."):
-            try:
-                ticker = yf.Ticker(selected_ticker)
-                hist = ticker.history(period="6mo")
+if ticker_input:
+    with st.spinner(f"Initiating Forensic Scan for {symbol}..."):
+        try:
+            ticker = yf.Ticker(symbol)
+            info = ticker.info
+            company_name = info.get("shortName", symbol)
+            sector = info.get("sector", "Unknown Sector")
+            current_price = info.get("currentPrice") or info.get("regularMarketPrice", 0)
+            
+            st.markdown(f"### 🎯 Target: **{company_name}** | Sector: {sector} | Price: ₹{current_price:,.2f}")
+            
+            # --- THE 3 INTELLIGENCE MOATS ---
+            tab1, tab2, tab3 = st.tabs([
+                "🗣️ Management Credibility Tracker", 
+                "🔎 Notes to Accounts Scanner", 
+                "🌍 Macro & Supply Chain Ripple"
+            ])
+            
+            # MOAT 1: Concall Audit
+            with tab1:
+                st.markdown("### Earnings Call: Promise vs. Reality Audit")
+                st.info("The AI cross-checks what the CEO promised 6 months ago against today's actual balance sheet.")
                 
-                if not hist.empty:
-                    current_price = hist['Close'].iloc[-1]
-                    prev_price = hist['Close'].iloc[0]
-                    pct_return = ((current_price - prev_price) / prev_price) * 100
-                    
-                    c1, c2 = st.columns(2)
-                    with c1:
-                        st.markdown(f'<div class="glass-card">Current Share Price<br><span class="metric-green">₹{current_price:,.2f}</span></div>', unsafe_allow_html=True)
-                    with c2:
-                        color = "#10b981" if pct_return >= 0 else "#ef4444"
-                        st.markdown(f'<div class="glass-card">6-Month Return<br><span style="color:{color}; font-size:1.5rem; font-weight:800;">{pct_return:+.1f}%</span></div>', unsafe_allow_html=True)
-                    
-                    # Simple Candlestick Chart
-                    hist.reset_index(inplace=True)
-                    hist['Date'] = pd.to_datetime(hist['Date']).dt.strftime('%Y-%m-%d')
-                    
-                    fig = go.Figure(data=[go.Candlestick(
-                        x=hist['Date'], open=hist['Open'], high=hist['High'],
-                        low=hist['Low'], close=hist['Close'],
-                        increasing_line_color='#10b981', decreasing_line_color='#ef4444'
-                    )])
-                    fig.update_layout(
-                        title=f"{selected_name} Price Trend (Past 6 Months)",
-                        template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)',
-                        plot_bgcolor='rgba(0,0,0,0)', height=380, xaxis_rangeslider_visible=False
-                    )
-                    st.plotly_chart(fig, use_container_width=True)
-            except Exception as e:
-                st.error("Could not fetch data for this brand right now.")
+                audit = ForensicAIAgent.analyze_management_credibility(symbol)
+                
+                st.markdown(f"""
+                <div class="glass-card">
+                    <h4 style="color:{audit['color']}; margin-top:0;">Credibility Rating: {audit['rating']}</h4>
+                    <hr style="border-color: rgba(255,255,255,0.1);">
+                    <p><b>🗣️ Past Management Promise:</b> {audit['past_promise']}</p>
+                    <p><b>📊 Current Balance Sheet Reality:</b> {audit['current_reality']}</p>
+                    <div style="background: rgba(255,255,255,0.05); padding: 12px; border-radius: 8px; margin-top: 15px;">
+                        <b>🤖 AI Forensic Verdict:</b> {audit['ai_verdict']}
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
 
-# ==========================================
-# TAB 2: EXPLORE BY SECTOR
-# ==========================================
-with tab2:
-    st.markdown("### 2. Choose an Industry to See Its Market Leaders:")
-    sector_choice = st.selectbox("Select an Industry:", list(SECTORS.keys()))
-    
-    st.markdown(f"#### Top Companies in {sector_choice}:")
-    for item in SECTORS[sector_choice]:
-        st.markdown(f"""
-        <div class="glass-card">
-            <span style="font-size:1.1rem; font-weight:700; color:#60a5fa;">{item['name']}</span>
-            <p style="color:#9ca3af; margin:4px 0 0 0;"><b>What they do:</b> {item['desc']}</p>
-        </div>
-        """, unsafe_allow_html=True)
+            # MOAT 2: Fine Print Scanner
+            with tab2:
+                st.markdown("### Annual Report: 'Notes to Accounts' Scanner")
+                st.caption("Standard screeners ignore the 300-page fine print. The AI extracts hidden red flags from the auditor's notes.")
+                
+                flags = ForensicAIAgent.scan_notes_to_accounts(symbol)
+                st.markdown('<div class="glass-card">', unsafe_allow_html=True)
+                for flag in flags:
+                    st.markdown(f"- {flag}")
+                st.markdown('</div>', unsafe_allow_html=True)
 
-# ==========================================
-# TAB 3: MUTUAL FUNDS FOR BEGINNERS
-# ==========================================
-with tab3:
-    st.markdown("### 3. Mutual Funds Explained Simply")
-    st.info("💡 **What is a Mutual Fund?** Instead of buying 1 stock yourself, a professional manager collects money from thousands of people and buys a basket of 30–50 stocks for you.")
-    
-    st.markdown("#### Pick a goal to explore sample top-rated fund types:")
-    
-    goal = st.radio("What is your primary investment goal?", [
-        "🌱 Low Risk (Safety First / Better than Bank FD)",
-        "🚀 High Growth (Long Term Wealth - 5+ Years)",
-        "⚖️ Balanced (Mix of Equity Stocks & Safe Bonds)"
-    ])
-    
-    if "Low Risk" in goal:
-        st.success("Recommended Category: **Liquid & Debt Mutual Funds**\n\n- Low volatility\n- Higher liquidity\n- Ideal for holding emergency savings")
-    elif "High Growth" in goal:
-        st.warning("Recommended Category: **Flexi Cap / Nifty 50 Index Funds**\n\n- Invests in top 50 companies in India\n- Subject to market ups and downs\n- Historically generates solid returns over 5+ year periods")
-    else:
-        st.info("Recommended Category: **Aggressive Hybrid Funds**\n\n- ~70% in stocks for growth + 30% in bonds for safety\n- Cushions the drop when markets fall")
+            # MOAT 3: Supply Chain Ripple
+            with tab3:
+                st.markdown("### Macroeconomic Ripple Engine")
+                st.caption(f"How global events are currently disrupting the **{sector}** supply chain.")
+                
+                macro_events = ForensicAIAgent.get_macro_ripple_effects(sector)
+                
+                for event in macro_events:
+                    st.markdown(f"""
+                    <div class="macro-card" style="border-left-color: {event['color']};">
+                        <h4 style="margin: 0 0 5px 0;">{event['event']} <span style="font-size:0.8rem; background:{event['color']}40; padding:2px 8px; border-radius:12px; color:{event['color']}; float:right;">{event['impact']}</span></h4>
+                        <p style="margin:0; color:#9ca3af;">{event['detail']}</p>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+        except Exception as e:
+            st.error(f"Error accessing corporate data: {str(e)}")
