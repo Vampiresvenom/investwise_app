@@ -1,112 +1,99 @@
 # data_engine.py
 import yfinance as yf
 import pandas as pd
-import numpy as np
-from datetime import datetime, timedelta
+import feedparser
+import urllib.parse
 
-class DataEngine:
-    """Production Data & Technical Analysis Engine for InvestWise AI"""
+class IndianMarketEngine:
+    """Production Engine strictly tuned for the NSE/BSE Indian Market."""
+
+    @staticmethod
+    def format_inr(value):
+        """Converts raw numbers into Indian Crores and Lakhs."""
+        if value is None or value == 0:
+            return "N/A"
+        
+        abs_value = abs(value)
+        if abs_value >= 1_000_000_000_000:  # Trillion -> Lakh Crore
+            formatted = f"₹{value / 1_000_000_000_000:.2f} Lakh Cr"
+        elif abs_value >= 10_000_000:       # 10 Million -> Crore
+            formatted = f"₹{value / 10_000_000:.2f} Cr"
+        elif abs_value >= 100_000:          # 100k -> Lakh
+            formatted = f"₹{value / 100_000:.2f} Lakh"
+        else:
+            formatted = f"₹{value:,.2f}"
+        return formatted
+
+    @staticmethod
+    def clean_ticker(symbol: str) -> str:
+        """Automatically appends .NS (National Stock Exchange) if missing."""
+        symbol = symbol.upper().strip()
+        if not symbol.endswith(".NS") and not symbol.endswith(".BO"):
+            symbol += ".NS"
+        return symbol
 
     @staticmethod
     def get_stock_profile(symbol: str) -> dict:
-        """Fetches live stock information, fundamental ratios, and operational metrics."""
+        nse_symbol = IndianMarketEngine.clean_ticker(symbol)
+        
         try:
-            ticker = yf.Ticker(symbol)
+            ticker = yf.Ticker(nse_symbol)
             info = ticker.info
             
-            # Extract essential balance sheet and valuation metrics safely
-            profile = {
-                "symbol": symbol.upper(),
-                "name": info.get("shortName") or info.get("longName") or symbol,
+            # If the dict is empty, the ticker is invalid
+            if not info or 'shortName' not in info:
+                return {"error": f"Could not find Indian stock: {nse_symbol}. Check spelling."}
+            
+            return {
+                "symbol": nse_symbol,
+                "name": info.get("shortName") or info.get("longName"),
                 "sector": info.get("sector", "N/A"),
-                "industry": info.get("industry", "N/A"),
-                "currency": info.get("currency", "INR"),
-                "current_price": info.get("currentPrice") or info.get("regularMarketPrice") or 0.0,
-                "previous_close": info.get("previousClose") or info.get("regularMarketPreviousClose") or 0.0,
-                "market_cap": info.get("marketCap", 0),
-                "pe_ratio": info.get("trailingPE", None),
-                "forward_pe": info.get("forwardPE", None),
-                "peg_ratio": info.get("pegRatio", None),
-                "pb_ratio": info.get("priceToBook", None),
-                "price_to_sales": info.get("priceToSalesTrailing12Months", None),
-                "ev_to_ebitda": info.get("enterpriseToEbitda", None),
-                "roe": info.get("returnOnEquity", None),
-                "roce": info.get("returnOnAssets", None), # Proxy fallback
-                "profit_margin": info.get("profitMargins", None),
-                "operating_margin": info.get("operatingMargins", None),
-                "revenue_growth": info.get("revenueGrowth", None),
-                "debt_to_equity": info.get("debtToEquity", None),
-                "current_ratio": info.get("currentRatio", None),
-                "free_cash_flow": info.get("freeCashflow", 0),
-                "total_debt": info.get("totalDebt", 0),
-                "total_cash": info.get("totalCash", 0),
-                "eps": info.get("trailingEps", None),
-                "book_value": info.get("bookValue", None),
-                "beta": info.get("beta", 1.0),
-                "52w_high": info.get("fiftyTwoWeekHigh", 0.0),
-                "52w_low": info.get("fiftyTwoWeekLow", 0.0),
+                "current_price": info.get("currentPrice") or info.get("regularMarketPrice", 0.0),
+                "market_cap_fmt": IndianMarketEngine.format_inr(info.get("marketCap")),
+                "pe_ratio": round(info.get("trailingPE", 0), 2) if info.get("trailingPE") else "N/A",
+                "roe": round(info.get("returnOnEquity", 0) * 100, 2) if info.get("returnOnEquity") else "N/A",
+                "debt_to_equity": info.get("debtToEquity", "N/A"),
                 "summary": info.get("longBusinessSummary", "Business description unavailable.")
             }
-            return profile
         except Exception as e:
-            return {"error": f"Failed to retrieve data for ticker '{symbol}': {str(e)}"}
+            return {"error": f"API Error for {nse_symbol}: {str(e)}"}
 
     @staticmethod
-    def get_historical_with_technicals(symbol: str, period: str = "6mo") -> pd.DataFrame:
-        """Fetches OHLCV data and calculates RSI, MACD, Moving Averages, and Bollinger Bands."""
-        ticker = yf.Ticker(symbol)
-        df = ticker.history(period=period)
+    def get_chart_data(symbol: str, period: str = "6mo") -> pd.DataFrame:
+        """Bulletproof chart fetcher that handles NSE market holidays/empty data."""
+        nse_symbol = IndianMarketEngine.clean_ticker(symbol)
+        df = yf.Ticker(nse_symbol).history(period=period)
         
         if df.empty:
             return df
             
-        # 1. Simple Moving Averages
-        df['SMA_50'] = df['Close'].rolling(window=min(50, len(df))).mean()
-        df['SMA_200'] = df['Close'].rolling(window=min(200, len(df))).mean()
-        
-        # 2. Exponential Moving Averages
-        df['EMA_12'] = df['Close'].ewm(span=12, adjust=False).mean()
-        df['EMA_26'] = df['Close'].ewm(span=26, adjust=False).mean()
-        
-        # 3. MACD Calculation
-        df['MACD'] = df['EMA_12'] - df['EMA_26']
-        df['MACD_Signal'] = df['MACD'].ewm(span=9, adjust=False).mean()
-        df['MACD_Hist'] = df['MACD'] - df['MACD_Signal']
-        
-        # 4. Relative Strength Index (RSI - 14 Days)
-        delta = df['Close'].diff()
-        gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
-        loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
-        rs = gain / (loss + 1e-9)
-        df['RSI'] = 100 - (100 / (1 + rs))
-        
-        # 5. Bollinger Bands (20 Days, 2 Std Dev)
-        df['BB_Middle'] = df['Close'].rolling(window=20).mean()
-        std = df['Close'].rolling(window=20).std()
-        df['BB_Upper'] = df['BB_Middle'] + (std * 2)
-        df['BB_Lower'] = df['BB_Middle'] - (std * 2)
-        
+        # Clean Indian market NaNs and flatten index for Plotly
+        df = df.dropna()
+        df.reset_index(inplace=True)
+        # Ensure the date column is clean
+        df['Date'] = pd.to_datetime(df['Date']).dt.date
         return df
 
     @staticmethod
-    def get_recent_news(symbol: str) -> list:
-        """Fetches verified recent news headlines associated with the symbol."""
+    def get_live_indian_news(symbol: str) -> list:
+        """Fetches breaking news strictly from the last 24h using Google News India RSS."""
+        base_name = symbol.replace(".NS", "").replace(".BO", "")
+        # Query specifically for Indian news (gl=IN) in the last 1 day (when:1d)
+        query = urllib.parse.quote(f"{base_name} share news when:1d")
+        url = f"https://news.google.com/rss/search?q={query}&hl=en-IN&gl=IN&ceid=IN:en"
+        
         try:
-            ticker = yf.Ticker(symbol)
-            raw_news = ticker.news
+            feed = feedparser.parse(url)
             clean_news = []
-            
-            for item in raw_news[:5]:
-                content = item.get("content", {})
-                title = content.get("title") or item.get("title", "Market Announcement")
-                publisher = content.get("provider", {}).get("displayName") or item.get("publisher", "Market News")
-                link = content.get("canonicalUrl", {}).get("url") or item.get("link", "#")
-                
+            for entry in feed.entries[:5]:
                 clean_news.append({
-                    "title": title,
-                    "publisher": publisher,
-                    "link": link
+                    "title": entry.title,
+                    "link": entry.link,
+                    "published": entry.published
                 })
+            
+            if not clean_news:
+                return [{"title": f"No major breaking news for {base_name} in the last 24 hours.", "link": "#"}]
             return clean_news
         except Exception:
-            return [{"title": "No verified recent news flags found.", "publisher": "System", "link": "#"}]
+            return [{"title": "Failed to fetch live Indian news feed.", "link": "#"}]
