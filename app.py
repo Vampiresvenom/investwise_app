@@ -3,68 +3,109 @@ import yfinance as yf
 import pandas as pd
 import requests
 import plotly.graph_objects as go
-from datetime import datetime
 
 # 1. Page Configuration
-st.set_page_config(page_title="InvestWise India", page_icon="🇮🇳", layout="wide")
+st.set_page_config(page_title="InvestWise India - Beginner Hub", page_icon="🟢", layout="wide")
 
+# Custom Styling
 st.markdown("""
 <style>
-    .stApp { background: #070a13; color: #f3f4f6; }
+    .stApp { background: #080c14; color: #f3f4f6; }
     .glass-card {
         background: rgba(255, 255, 255, 0.04);
         border: 1px solid rgba(255, 255, 255, 0.1);
         border-radius: 12px;
-        padding: 20px;
-        margin-bottom: 20px;
+        padding: 16px;
+        margin-bottom: 15px;
     }
-    .val-green { color: #10b981; font-size: 1.6rem; font-weight: 800; }
-    .val-blue { color: #60a5fa; font-size: 1.6rem; font-weight: 800; }
+    .brand-title { font-size: 1.2rem; font-weight: 700; color: #60a5fa; }
+    .brand-desc { font-size: 0.85rem; color: #9ca3af; margin-bottom: 10px; }
+    .metric-green { color: #10b981; font-size: 1.5rem; font-weight: 800; }
 </style>
 """, unsafe_allow_html=True)
 
-st.title("🇮🇳 InvestWise AI: Market Terminal")
-st.caption("Institutional Grade Equities, Mutual Funds, and IPO Research")
+st.title("🟢 InvestWise AI: Your Investment Guide")
+st.caption("No financial experience needed — explore businesses you already use every day.")
 
-# --- TRIPLE ENGINE TABS ---
-tab1, tab2, tab3 = st.tabs(["📈 Equities & AI", "🏦 Mutual Funds (Live NAV)", "📄 IPO DRHP Scanner"])
+# --- CURATED EVERYDAY BRANDS DATA ---
+EVERYDAY_BRANDS = {
+    "Zomato / Blinkit": {"ticker": "ZOMATO.NS", "desc": "Food delivery & 10-minute grocery delivery app."},
+    "Tata Motors": {"ticker": "TATAMOTORS.NS", "desc": "Makes Nexon, Punch, EV cars, and Jaguar Land Rover."},
+    "HDFC Bank": {"ticker": "HDFCBANK.NS", "desc": "India's largest private bank (Credit cards, loans, savings)."},
+    "Bharti Airtel": {"ticker": "BHARTIARTL.NS", "desc": "Mobile network, 5G data, and DTH connections."},
+    "Asian Paints": {"ticker": "ASIANPAINT.NS", "desc": "Paints 8 out of 10 homes in India."},
+    "Titan (Tanishq)": {"ticker": "TITAN.NS", "desc": "Owns Tanishq jewellery, Fastrack, and Titan watches."},
+    "Reliance (Jio/Retail)": {"ticker": "RELIANCE.NS", "desc": "Jio telecom, Reliance Fresh, trends, and oil refineries."}
+}
+
+SECTORS = {
+    "🚗 Cars & Bikes": [
+        {"name": "Tata Motors", "ticker": "TATAMOTORS.NS", "desc": "Passenger cars & EVs"},
+        {"name": "Maruti Suzuki", "ticker": "MARUTI.NS", "desc": "India's highest selling car maker"},
+        {"name": "Mahindra & Mahindra", "ticker": "M&M.NS", "desc": "SUVs (Thar, XUV700) & Tractors"}
+    ],
+    "🏦 Banks & Finance": [
+        {"name": "State Bank of India (SBI)", "ticker": "SBIN.NS", "desc": "Largest government bank in India"},
+        {"name": "HDFC Bank", "ticker": "HDFCBANK.NS", "desc": "Largest private sector bank"},
+        {"name": "ICICI Bank", "ticker": "ICICIBANK.NS", "desc": "Major private bank & digital banking leader"}
+    ],
+    "💻 Tech & IT": [
+        {"name": "TCS (Tata Consultancy)", "ticker": "TCS.NS", "desc": "Global IT services giant"},
+        {"name": "Infosys", "ticker": "INFY.NS", "desc": "Software & tech consulting leader"},
+        {"name": "HCLTech", "ticker": "HCLTECH.NS", "desc": "IT engineering & cloud solutions"}
+    ]
+}
+
+# --- NAVIGATION TABS ---
+tab1, tab2, tab3 = st.tabs(["🛒 Everyday Brands", "🏭 Explore By Sector", "🏦 Mutual Funds For Beginners"])
 
 # ==========================================
-# TAB 1: EQUITIES ENGINE
+# TAB 1: BRANDS YOU KNOW
 # ==========================================
 with tab1:
-    st.markdown("### NSE Equity Deep Dive")
-    ticker_input = st.text_input("Enter Indian Stock Symbol (e.g., TATAMOTORS, ZOMATO, INFY):", value="TATAMOTORS")
+    st.markdown("### 1. Pick a brand you know in real life:")
+    st.caption("You don't need to guess ticker symbols — just click on a company you recognize!")
     
-    if ticker_input:
-        # Auto-append NSE suffix if missing
-        symbol = ticker_input.upper().strip()
-        if not symbol.endswith(".NS") and not symbol.endswith(".BO"):
-            symbol += ".NS"
-            
-        with st.spinner("Bypassing firewalls to fetch live NSE Data..."):
+    # Grid of Everyday Brand Cards
+    cols = st.columns(3)
+    selected_ticker = None
+    selected_name = None
+    
+    for idx, (brand_name, info) in enumerate(EVERYDAY_BRANDS.items()):
+        with cols[idx % 3]:
+            st.markdown(f"""
+            <div class="glass-card">
+                <div class="brand-title">{brand_name}</div>
+                <div class="brand-desc">{info['desc']}</div>
+            </div>
+            """, unsafe_allow_html=True)
+            if st.button(f"Analyze {brand_name}", key=f"btn_{idx}"):
+                selected_ticker = info['ticker']
+                selected_name = brand_name
+
+    # Detailed Analysis view if a button was clicked
+    if selected_ticker:
+        st.markdown("---")
+        st.markdown(f"### 📊 Business Deep Dive: **{selected_name}**")
+        
+        with st.spinner("Fetching live stock details..."):
             try:
-                ticker = yf.Ticker(symbol)
-                # Using .history() and .fast_info bypasses the cloud blocks that crash .info()
+                ticker = yf.Ticker(selected_ticker)
                 hist = ticker.history(period="6mo")
                 
-                if hist.empty:
-                    st.error(f"Could not load data for {symbol}. Ensure it is a valid NSE/BSE ticker.")
-                else:
+                if not hist.empty:
                     current_price = hist['Close'].iloc[-1]
-                    # Format Market Cap to Indian Crores
-                    raw_mcap = ticker.fast_info.market_cap
-                    mcap_cr = f"₹{raw_mcap / 10_000_000:,.2f} Cr" if raw_mcap else "N/A"
+                    prev_price = hist['Close'].iloc[0]
+                    pct_return = ((current_price - prev_price) / prev_price) * 100
                     
-                    c1, c2, c3 = st.columns(3)
+                    c1, c2 = st.columns(2)
                     with c1:
-                        st.markdown(f'<div class="glass-card">Live Price<br><span class="val-green">₹{current_price:,.2f}</span></div>', unsafe_allow_html=True)
+                        st.markdown(f'<div class="glass-card">Current Share Price<br><span class="metric-green">₹{current_price:,.2f}</span></div>', unsafe_allow_html=True)
                     with c2:
-                        st.markdown(f'<div class="glass-card">Market Cap<br><span class="val-blue">{mcap_cr}</span></div>', unsafe_allow_html=True)
-                    with c3:
-                        st.markdown(f'<div class="glass-card">52W High<br><span class="val-green">₹{ticker.fast_info.year_high:,.2f}</span></div>', unsafe_allow_html=True)
+                        color = "#10b981" if pct_return >= 0 else "#ef4444"
+                        st.markdown(f'<div class="glass-card">6-Month Return<br><span style="color:{color}; font-size:1.5rem; font-weight:800;">{pct_return:+.1f}%</span></div>', unsafe_allow_html=True)
                     
-                    # Clean Charting (Removes empty weekends)
+                    # Simple Candlestick Chart
                     hist.reset_index(inplace=True)
                     hist['Date'] = pd.to_datetime(hist['Date']).dt.strftime('%Y-%m-%d')
                     
@@ -74,101 +115,48 @@ with tab1:
                         increasing_line_color='#10b981', decreasing_line_color='#ef4444'
                     )])
                     fig.update_layout(
-                        title=f"{symbol} - 6 Month Trend", template="plotly_dark",
-                        paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-                        height=400, xaxis_rangeslider_visible=False
+                        title=f"{selected_name} Price Trend (Past 6 Months)",
+                        template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)',
+                        plot_bgcolor='rgba(0,0,0,0)', height=380, xaxis_rangeslider_visible=False
                     )
                     st.plotly_chart(fig, use_container_width=True)
             except Exception as e:
-                st.error(f"System Error: {str(e)}")
+                st.error("Could not fetch data for this brand right now.")
 
 # ==========================================
-# TAB 2: MUTUAL FUNDS ENGINE
+# TAB 2: EXPLORE BY SECTOR
 # ==========================================
 with tab2:
-    st.markdown("### Real-Time Mutual Fund NAV & History")
-    st.caption("Powered directly by the AMFI (Association of Mutual Funds in India) database.")
+    st.markdown("### 2. Choose an Industry to See Its Market Leaders:")
+    sector_choice = st.selectbox("Select an Industry:", list(SECTORS.keys()))
     
-    mf_query = st.text_input("Search Fund (e.g., Parag Parikh, HDFC Small Cap, Quant):")
-    
-    if mf_query:
-        with st.spinner("Searching AMFI Database..."):
-            try:
-                # Direct API call to Indian Government MF database
-                url = f"https://api.mfapi.in/mf/search?q={mf_query}"
-                search_results = requests.get(url).json()
-                
-                if not search_results:
-                    st.warning("No mutual funds found matching that name.")
-                else:
-                    options = {f"{item['schemeCode']} - {item['schemeName']}": item['schemeCode'] for item in search_results[:10]}
-                    selected_fund = st.selectbox("Select exact fund variant:", list(options.keys()))
-                    
-                    if selected_fund:
-                        fund_code = options[selected_fund]
-                        nav_data = requests.get(f"https://api.mfapi.in/mf/{fund_code}").json()
-                        
-                        if 'data' in nav_data and nav_data['data']:
-                            df_mf = pd.DataFrame(nav_data['data'])
-                            df_mf['date'] = pd.to_datetime(df_mf['date'], format='%d-%m-%Y')
-                            df_mf['nav'] = df_mf['nav'].astype(float)
-                            df_mf = df_mf.sort_values('date')
-                            
-                            latest_nav = df_mf['nav'].iloc[-1]
-                            latest_date = df_mf['date'].iloc[-1].strftime('%d %b %Y')
-                            
-                            st.markdown(f'<div class="glass-card">Current NAV (As of {latest_date})<br><span class="val-blue">₹{latest_nav:,.4f}</span></div>', unsafe_allow_html=True)
-                            
-                            fig_mf = go.Figure(data=go.Scatter(
-                                x=df_mf['date'], y=df_mf['nav'],
-                                mode='lines', line=dict(color='#3b82f6', width=2)
-                            ))
-                            fig_mf.update_layout(
-                                title="Historical NAV Performance", template="plotly_dark",
-                                paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-                                height=400
-                            )
-                            st.plotly_chart(fig_mf, use_container_width=True)
-            except Exception as e:
-                st.error("Error connecting to AMFI database.")
+    st.markdown(f"#### Top Companies in {sector_choice}:")
+    for item in SECTORS[sector_choice]:
+        st.markdown(f"""
+        <div class="glass-card">
+            <span style="font-size:1.1rem; font-weight:700; color:#60a5fa;">{item['name']}</span>
+            <p style="color:#9ca3af; margin:4px 0 0 0;"><b>What they do:</b> {item['desc']}</p>
+        </div>
+        """, unsafe_allow_html=True)
 
 # ==========================================
-# TAB 3: IPO & DRHP AI SCANNER
+# TAB 3: MUTUAL FUNDS FOR BEGINNERS
 # ==========================================
 with tab3:
-    st.markdown("### 📄 IPO Draft Prospectus (DRHP) Risk Scanner")
-    st.caption("Paste excerpts from the 'Objects of the Issue' or 'Risk Factors' section of an upcoming IPO to scan for institutional red flags.")
-
-    drhp_text = st.text_area("Paste DRHP Text Segment Here:", height=200)
-
-    if st.button("Scan Prospectus Text", type="primary"):
-        if drhp_text:
-            text_lower = drhp_text.lower()
-            red_flags = []
-            positive_signals = []
-
-            # Hardcoded logic checking for classic IPO red flags
-            if "repay debt" in text_lower or "repayment of loan" in text_lower or "repayment of certain borrowings" in text_lower:
-                red_flags.append("Debt Repayment: Funds are going to lenders rather than directly scaling the business.")
-            if "offer for sale" in text_lower or "ofs" in text_lower:
-                red_flags.append("Offer for Sale (OFS): Existing promoters or VCs are cashing out. This does not bring fresh capital into the company.")
-            if "litigation" in text_lower or "legal proceedings" in text_lower:
-                red_flags.append("Litigation Risk: The company has disclosed unresolved legal or regulatory proceedings.")
-            if "working capital" in text_lower:
-                positive_signals.append("Operational Fuel: A portion of funds is allocated to daily working capital.")
-            if "capital expenditure" in text_lower or "manufacturing facility" in text_lower or "expansion" in text_lower:
-                positive_signals.append("Growth Capital: Money is targeted at building hard assets or expanding capacity.")
-
-            c1, c2 = st.columns(2)
-            with c1:
-                st.markdown("#### 🚨 Identified Red Flags")
-                if red_flags:
-                    for flag in red_flags: st.error(flag)
-                else:
-                    st.success("No major red flags detected in this text block.")
-            with c2:
-                st.markdown("#### 🟢 Positive Signals")
-                if positive_signals:
-                    for pos in positive_signals: st.success(pos)
-                else:
-                    st.warning("No explicit growth capital terms identified.")
+    st.markdown("### 3. Mutual Funds Explained Simply")
+    st.info("💡 **What is a Mutual Fund?** Instead of buying 1 stock yourself, a professional manager collects money from thousands of people and buys a basket of 30–50 stocks for you.")
+    
+    st.markdown("#### Pick a goal to explore sample top-rated fund types:")
+    
+    goal = st.radio("What is your primary investment goal?", [
+        "🌱 Low Risk (Safety First / Better than Bank FD)",
+        "🚀 High Growth (Long Term Wealth - 5+ Years)",
+        "⚖️ Balanced (Mix of Equity Stocks & Safe Bonds)"
+    ])
+    
+    if "Low Risk" in goal:
+        st.success("Recommended Category: **Liquid & Debt Mutual Funds**\n\n- Low volatility\n- Higher liquidity\n- Ideal for holding emergency savings")
+    elif "High Growth" in goal:
+        st.warning("Recommended Category: **Flexi Cap / Nifty 50 Index Funds**\n\n- Invests in top 50 companies in India\n- Subject to market ups and downs\n- Historically generates solid returns over 5+ year periods")
+    else:
+        st.info("Recommended Category: **Aggressive Hybrid Funds**\n\n- ~70% in stocks for growth + 30% in bonds for safety\n- Cushions the drop when markets fall")
